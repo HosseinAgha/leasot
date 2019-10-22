@@ -1,0 +1,142 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const lodash_1 = __importDefault(require("lodash"));
+const parsersDb = {
+    '.bash': { parserName: 'coffeeParser' },
+    '.c': { parserName: 'defaultParser' },
+    '.cjsx': { parserName: 'coffeeParser' },
+    '.coffee': { parserName: 'coffeeParser' },
+    '.cpp': { parserName: 'defaultParser' },
+    '.cr': { parserName: 'coffeeParser' },
+    '.cs': { parserName: 'defaultParser' },
+    '.cson': { parserName: 'coffeeParser' },
+    '.css': { parserName: 'defaultParser' },
+    '.ejs': { parserName: 'ejsParser' },
+    '.erb': { parserName: 'ejsParser' },
+    '.erl': { parserName: 'erlangParser' },
+    '.es': { parserName: 'defaultParser' },
+    '.es6': { parserName: 'defaultParser' },
+    '.go': { parserName: 'defaultParser' },
+    '.h': { parserName: 'defaultParser' },
+    '.haml': { parserName: 'hamlParser' },
+    '.handlebars': { parserName: 'hbsParser' },
+    '.hbs': { parserName: 'hbsParser' },
+    '.hgn': { parserName: 'hbsParser' },
+    '.hogan': { parserName: 'hbsParser' },
+    '.hrl': { parserName: 'erlangParser' },
+    '.hs': { parserName: 'haskellParser' },
+    '.htm': { parserName: 'twigParser' },
+    '.html': { parserName: 'twigParser' },
+    '.jade': { parserName: 'jadeParser' },
+    '.java': { parserName: 'defaultParser' },
+    '.js': { parserName: 'defaultParser' },
+    '.jsx': { parserName: 'defaultParser' },
+    '.kt': { parserName: 'defaultParser' },
+    '.less': { parserName: 'defaultParser' },
+    '.m': { parserName: 'defaultParser' },
+    '.markdown': { parserName: 'twigParser' },
+    '.md': { parserName: 'twigParser' },
+    '.mm': { parserName: 'defaultParser' },
+    '.mustache': { parserName: 'hbsParser' },
+    '.njk': { parserName: 'twigParser' },
+    '.pas': { parserName: 'pascalParser' },
+    '.php': { parserName: 'defaultParser', includedFiles: ['.html', '.js', '.css'] },
+    '.pl': { parserName: 'coffeeParser' },
+    '.pm': { parserName: 'coffeeParser' },
+    '.proto': { parserName: 'defaultParser' },
+    '.pug': { parserName: 'jadeParser' },
+    '.py': { parserName: 'pythonParser' },
+    '.rb': { parserName: 'coffeeParser' },
+    '.rs': { parserName: 'defaultParser' },
+    '.sass': { parserName: 'defaultParser' },
+    '.scala': { parserName: 'defaultParser' },
+    '.scss': { parserName: 'defaultParser' },
+    '.sh': { parserName: 'coffeeParser' },
+    '.sql': { parserName: ['defaultParser', 'haskellParser'] },
+    '.ss': { parserName: 'ssParser' },
+    '.styl': { parserName: 'defaultParser' },
+    '.swift': { parserName: 'defaultParser' },
+    '.svelte': { parserName: 'twigParser', includedFiles: ['.html', '.js', '.css'] },
+    '.tex': { parserName: 'latexParser' },
+    '.ts': { parserName: 'defaultParser' },
+    '.tsx': { parserName: 'defaultParser' },
+    '.twig': { parserName: 'twigParser' },
+    '.vue': { parserName: 'twigParser', includedFiles: ['.html', '.js', '.css'] },
+    '.yaml': { parserName: 'coffeeParser' },
+    '.yml': { parserName: 'coffeeParser' },
+    '.zsh': { parserName: 'coffeeParser' },
+};
+/**
+ * Extend the extensions database at runtime, by either adding support for new extensions or overriding existing ones
+ * @param extendedDb The extension database to extend with
+ */
+exports.associateExtWithParser = (extendedDb) => {
+    const keys = Object.keys(extendedDb);
+    if (keys.length === 0) {
+        return;
+    }
+    keys.forEach(function (extension) {
+        if (extension.length <= 1 || extension[0] !== '.') {
+            throw new TypeError(`Cannot register extension: invalid extension ${extension}`);
+        }
+        const parser = extendedDb[extension];
+        if (!parser || !parser.parserName) {
+            throw new TypeError('Cannot register extension: `parserName` is missing');
+        }
+    });
+    // Add any additional parsers.
+    Object.assign(parsersDb, extendedDb);
+};
+/**
+ * Check whether the provided extension is currently supported
+ * @param extension the extension to check
+ */
+exports.isExtensionSupported = (extension) => parsersDb.hasOwnProperty(extension);
+/**
+ * Get the effective active parser names from an extension
+ */
+const getActiveParserNames = (extension, withInlineFiles) => {
+    const originalParser = parsersDb[extension];
+    let parserNames = [].concat(originalParser.parserName);
+    const includedFiles = originalParser.includedFiles || [];
+    if (withInlineFiles) {
+        includedFiles.forEach(includedExtension => {
+            // parserName could be an array
+            parserNames = parserNames.concat(parsersDb[includedExtension].parserName);
+        });
+        parserNames = lodash_1.default.uniq(parserNames);
+    }
+    return parserNames;
+};
+/**
+ * Parse the provided content and return an array of parsed items
+ * @param content The contents to parse
+ * @param config The parse configuration
+ */
+exports.parse = (content, config) => {
+    const { associateParser = {}, customParsers = {}, customTags = [], extension, filename, withInlineFiles = false, } = config;
+    // Associate extensions with bundled parsers
+    exports.associateExtWithParser(associateParser);
+    if (!exports.isExtensionSupported(extension)) {
+        throw new Error(`extension ${extension} is not supported.`);
+    }
+    if (customTags && !Array.isArray(customTags)) {
+        throw new TypeError('`customTags` must be an array');
+    }
+    const parseOptions = { customTags };
+    const parserNames = getActiveParserNames(extension, withInlineFiles);
+    const parsed = parserNames
+        .map(parserName => {
+        const parserFactory = customParsers[parserName] || require('./parsers/' + parserName).default;
+        const parser = parserFactory(parseOptions);
+        return parser(content, filename);
+    })
+        .reduce((items, item) => items.concat(item), [])
+        .sort((item1, item2) => item1.line - item2.line);
+    return lodash_1.default.uniqWith(parsed, function (a, b) {
+        return a.line === b.line && a.tag === b.tag && a.text === b.text;
+    });
+};
